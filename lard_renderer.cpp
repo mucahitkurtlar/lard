@@ -30,19 +30,14 @@ namespace lard {
         } else {
             std::shared_ptr<LardSwapChain> oldSwapChain = std::move(lardSwapChain);
             lardSwapChain = std::make_unique<LardSwapChain>(lardDevice, extent, oldSwapChain);
-            if (oldSwapChain->compareSwapFormats(*lardSwapChain.get())) {
+            if (!oldSwapChain->compareSwapFormats(*lardSwapChain.get())) {
                 throw std::runtime_error("Swap chain image or depth format has changed");
             }
-            if (lardSwapChain->imageCount() != commandBuffers.size()) {
-                freeCommandBuffers();
-                createCommandBuffers();
-            }
-
         }
     }
 
     void LardRenderer::createCommandBuffers() {
-        commandBuffers.resize(lardSwapChain->imageCount());
+        commandBuffers.resize(LardSwapChain::MAX_FRAMES_IN_FLIGHT);
 
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -99,6 +94,7 @@ namespace lard {
         }
 
         isFrameStarted = false;
+        currentFrameIndex = (currentFrameIndex + 1) % LardSwapChain::MAX_FRAMES_IN_FLIGHT;
     }
 
     void LardRenderer::beginSwapChainRenderPass(VkCommandBuffer commandBuffer) {
