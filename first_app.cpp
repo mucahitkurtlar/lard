@@ -1,4 +1,5 @@
 #include "first_app.hpp"
+#include "simple_render_system.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -11,30 +12,19 @@
 
 
 namespace lard {
-
-    struct SimplePushConstantData {
-        glm::mat2 transform{ 1.f };
-        glm::vec2 offset;
-        alignas(16) glm::vec3 color;
-    };
-
-
     FirstApp::FirstApp() {
         loadGameObjects();
-        createPipelineLayout();
-        createPipeline();
     }
 
-    FirstApp::~FirstApp() {
-        vkDestroyPipelineLayout(lardDevice.device(), pipelineLayout, nullptr);
-    }
+    FirstApp::~FirstApp() {}
 
     void FirstApp::run() {
+        SimpleRenderSystem simpleRenderSystem{ lardDevice, lardRenderer.getSwapChainRenderPass() };
         while (!lardWindow.shouldClose()) {
             glfwPollEvents();
             if (auto commandBuffer = lardRenderer.beginFrame()) {
                 lardRenderer.beginSwapChainRenderPass(commandBuffer);
-                renderGameObjects(commandBuffer);
+                simpleRenderSystem.renderGameObjects(commandBuffer, gameObjects);
                 lardRenderer.endSwapChainRenderPass(commandBuffer);
                 lardRenderer.endFrame();
             }
@@ -47,7 +37,7 @@ namespace lard {
 
     void FirstApp::loadGameObjects() {
 
-        /*
+
         std::vector<LardModel::Vertex> vertices{
             {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
             {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -61,90 +51,38 @@ namespace lard {
 
         auto triangle = LardGameObject::createGameObject();
         triangle.model = lardModel;
-        triangle.color = {.1f, .8f, .1f};
+        triangle.color = { .1f, .8f, .1f };
         triangle.transform2d.translation.x = .2f;
-        triangle.transform2d.scale = {2.f, .5f};
+        triangle.transform2d.scale = { 2.f, .5f };
         triangle.transform2d.rotation = .25f * glm::two_pi<float>(); // radian
 
         gameObjects.push_back(std::move(triangle));
-        */
-        std::vector<LardModel::Vertex> vertices{
-            {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}} };
-        auto lardModel = std::make_shared<LardModel>(lardDevice, vertices);
 
-        std::vector<glm::vec3> colors{
-            {1.f, .7f, .73f},
-            {1.f, .87f, .73f},
-            {1.f, 1.f, .73f},
-            {.73f, 1.f, .8f},
-            {.73, .88f, 1.f}  //
-        };
-        for (auto& color : colors) {
-            color = glm::pow(color, glm::vec3{ 2.2f });
-        }
-        for (int i = 0; i < 40; i++) {
-            auto triangle = LardGameObject::createGameObject();
-            triangle.model = lardModel;
-            triangle.transform2d.scale = glm::vec2(.5f) + i * 0.025f;
-            triangle.transform2d.rotation = i * glm::pi<float>() * .025f;
-            triangle.color = colors[i % colors.size()];
-            gameObjects.push_back(std::move(triangle));
-        }
-    }
+        /*
+         std::vector<LardModel::Vertex> vertices{
+             {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+             {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+             {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}} };
+         auto lardModel = std::make_shared<LardModel>(lardDevice, vertices);
 
-    void FirstApp::createPipelineLayout() {
-        VkPushConstantRange pushConstantRange{};
-        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        pushConstantRange.offset = 0;
-        pushConstantRange.size = sizeof(SimplePushConstantData);
-
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0;
-        pipelineLayoutInfo.pSetLayouts = nullptr;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-        if (vkCreatePipelineLayout(lardDevice.device(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create pipeline layout!");
-        }
-    }
-
-    void FirstApp::createPipeline() {
-        assert(pipelineLayout != nullptr && "Cannot create pipeline before pipeline layout");
-
-        PipelineConfigInfo pipelineConfig{};
-        LardPipeline::defaultPipelineConfigInfo(pipelineConfig);
-        pipelineConfig.renderPass = lardRenderer.getSwapChainRenderPass();
-        pipelineConfig.pipelineLayout = pipelineLayout;
-        lardPipeline = std::make_unique<LardPipeline>(
-            lardDevice,
-            "shaders/simple_shader.vert.spv",
-            "shaders/simple_shader.frag.spv",
-            pipelineConfig);
-    }
-
-    void FirstApp::renderGameObjects(VkCommandBuffer commandBuffer) {
-        int i = 0;
-        for (auto& obj : gameObjects) {
-            i += 1;
-            obj.transform2d.rotation = glm::mod<float>(obj.transform2d.rotation + 0.0001f * i, 2.f * glm::pi<float>());
-        }
-
-        lardPipeline->bind(commandBuffer);
-
-        for (auto& obj : gameObjects) {
-            obj.transform2d.rotation = glm::mod(obj.transform2d.rotation + 0.001f, glm::two_pi<float>());
-
-            SimplePushConstantData push{};
-            push.offset = obj.transform2d.translation;
-            push.color = obj.color;
-            push.transform = obj.transform2d.mat2();
-
-            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SimplePushConstantData), &push);
-            obj.model->bind(commandBuffer);
-            obj.model->draw(commandBuffer);
-        }
+         std::vector<glm::vec3> colors{
+             {1.f, .7f, .73f},
+             {1.f, .87f, .73f},
+             {1.f, 1.f, .73f},
+             {.73f, 1.f, .8f},
+             {.73, .88f, 1.f}  //
+         };
+         for (auto& color : colors) {
+             color = glm::pow(color, glm::vec3{ 2.2f });
+         }
+         for (int i = 0; i < 40; i++) {
+             auto triangle = LardGameObject::createGameObject();
+             triangle.model = lardModel;
+             triangle.transform2d.scale = glm::vec2(.5f) + i * 0.025f;
+             triangle.transform2d.rotation = i * glm::pi<float>() * .025f;
+             triangle.color = colors[i % colors.size()];
+             gameObjects.push_back(std::move(triangle));
+         }
+         */
     }
 }

@@ -5,7 +5,6 @@
 
 #include "lard_window.hpp"
 #include "lard_game_object.hpp"
-#include "lard_pipeline.hpp"
 #include "lard_device.hpp"
 #include "lard_renderer.hpp"
 
@@ -22,15 +21,10 @@ namespace lard {
         void run();
     private:
         void loadGameObjects();
-        void createPipelineLayout();
-        void createPipeline();
-        void renderGameObjects(VkCommandBuffer commandBuffer);
 
         LardWindow lardWindow{ WIDTH, HEIGHT, "Hello Vulkan!" };
         LardDevice lardDevice{ lardWindow };
         LardRenderer lardRenderer{ lardWindow, lardDevice };
-        std::unique_ptr<LardPipeline> lardPipeline;
-        VkPipelineLayout pipelineLayout;
         std::vector<LardGameObject> gameObjects;
     };
 }
