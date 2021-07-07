@@ -28,7 +28,11 @@ namespace lard {
         if (lardSwapChain == nullptr) {
             lardSwapChain = std::make_unique<LardSwapChain>(lardDevice, extent);
         } else {
-            lardSwapChain = std::make_unique<LardSwapChain>(lardDevice, extent, std::move(lardSwapChain));
+            std::shared_ptr<LardSwapChain> oldSwapChain = std::move(lardSwapChain);
+            lardSwapChain = std::make_unique<LardSwapChain>(lardDevice, extent, oldSwapChain);
+            if (oldSwapChain->compareSwapFormats(*lardSwapChain.get())) {
+                throw std::runtime_error("Swap chain image or depth format has changed");
+            }
             if (lardSwapChain->imageCount() != commandBuffers.size()) {
                 freeCommandBuffers();
                 createCommandBuffers();
